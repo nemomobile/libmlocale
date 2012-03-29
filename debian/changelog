@@ -1,3 +1,10 @@
+libmlocale (0.4.5-1) unstable; urgency=low
+
+  * Test patch for NB#289167 - [TASK] No fallback to English translation in
+                               application name if language not supported
+
+ -- Stephan Binner <stephan.binner@basyskom.com>  Thu, 29 Mar 2012 10:09:00 +0300
+
 libmlocale (0.4.4-1) unstable; urgency=low
 
   * Fixes: NB#290973 - Cannot share the default video “Dolby Soundscapes” when device language is Chinese.
