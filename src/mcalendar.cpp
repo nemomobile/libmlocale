@@ -273,8 +273,6 @@ void MCalendar::setDate(const QDate &date)
     setDateTime(datetime);
 }
 
-#define MSECS_PER_DAY 86400000
-
 //! Sets the calendar according to given QDate
 void MCalendar::setDateTime(QDateTime dateTime)
 {
@@ -282,34 +280,25 @@ void MCalendar::setDateTime(QDateTime dateTime)
 
     UErrorCode status = U_ZERO_ERROR;
 
-    // we avoid time conversions made by qt
-    Qt::TimeSpec originalTimeSpec = dateTime.timeSpec();
-    dateTime.setTimeSpec(Qt::UTC);
+    QDate date = dateTime.date();
+    QTime time = dateTime.time();
+    if (QLatin1String(d->_calendar->getType()) != QLatin1String("gregorian")
+            || dateTime.timeSpec() != Qt::LocalTime) {
+        icu::Calendar *convCalendar = icu::Calendar::createInstance(
+                dateTime.timeSpec() == Qt::LocalTime
+                ? d->_calendar->getTimeZone()
+                : *icu::TimeZone::getGMT(), status);
+        convCalendar->set(date.year(), date.month() - 1, date.day(),
+                time.hour(), time.minute(), time.second());
+        convCalendar->set(UCAL_MILLISECOND, time.msec());
+        d->_calendar->setTime(convCalendar->getTime(status), status);
 
-    // We cannot use QDateTime::toTime_t because this
-    // works only for dates after 1970-01-01T00:00:00.000.
-#if QT_VERSION >= 0x040700
-    UDate icuDate = dateTime.toMSecsSinceEpoch();
-#else
-    // Qt < 4.7 lacks QDateTime::toMSecsSinceEpoch(), we need to emulate it:
-    int days = QDate(1970, 1, 1).daysTo(dateTime.date());
-    qint64 msecs = qint64(QTime().secsTo(dateTime.time())) * 1000;
-    UDate icuDate = (qint64(days) * MSECS_PER_DAY) + msecs;
-#endif
-
-    if (originalTimeSpec == Qt::LocalTime) {
-        // convert from local time to UTC
-        icu::UnicodeString tz_name = MIcuConversions::qStringToUnicodeString(MCalendar::systemTimeZone());
-        icu::TimeZone *tz = icu::TimeZone::createTimeZone(tz_name) ;
-        d->_calendar->setTimeZone(*tz);
-        qint32 rawOffset;
-        qint32 dstOffset;
-        tz->getOffset(icuDate, true /*local */, rawOffset, dstOffset, status);
-        icuDate = icuDate - rawOffset - dstOffset;
-        delete tz ;
+        delete convCalendar;
+    } else {
+        d->_calendar->set(date.year(), date.month() - 1, date.day(),
+                time.hour(), time.minute(), time.second());
+        d->_calendar->set(UCAL_MILLISECOND, time.msec());
     }
-
-    d->_calendar->setTime(icuDate, status);
 }
 
 
@@ -320,41 +309,37 @@ QDateTime MCalendar::qDateTime(Qt::TimeSpec spec) const
     Q_D(const MCalendar);
 
     UErrorCode status = U_ZERO_ERROR;
-    UDate icuDate = d->_calendar->getTime(status);
 
-    if (spec == Qt::LocalTime) {
-        // convert from UTC to local time
-        const icu::TimeZone &tz = d->_calendar->getTimeZone();
-        qint32 rawOffset;
-        qint32 dstOffset;
-        tz.getOffset(icuDate, true /*local */, rawOffset, dstOffset, status);
-        icuDate = icuDate + rawOffset + dstOffset;
+    if (QLatin1String(d->_calendar->getType()) != QLatin1String("gregorian")
+            || spec != Qt::LocalTime) {
+        icu::Calendar *convCalendar = icu::Calendar::createInstance(
+                spec == Qt::LocalTime
+                ? d->_calendar->getTimeZone()
+                : *icu::TimeZone::getGMT(), status);
+        convCalendar->setTime(d->_calendar->getTime(status), status);
+
+        QDate date(convCalendar->get(UCAL_YEAR, status),
+                convCalendar->get(UCAL_MONTH, status) + 1,
+                convCalendar->get(UCAL_DAY_OF_MONTH, status));
+        QTime time(convCalendar->get(UCAL_HOUR_OF_DAY, status),
+                convCalendar->get(UCAL_MINUTE, status),
+                convCalendar->get(UCAL_SECOND, status),
+                convCalendar->get(UCAL_MILLISECOND, status));
+
+        delete convCalendar;
+
+        return QDateTime(date, time, spec);
+    } else {
+        QDate date(d->_calendar->get(UCAL_YEAR, status),
+                d->_calendar->get(UCAL_MONTH, status) + 1,
+                d->_calendar->get(UCAL_DAY_OF_MONTH, status));
+        QTime time(d->_calendar->get(UCAL_HOUR_OF_DAY, status),
+                d->_calendar->get(UCAL_MINUTE, status),
+                d->_calendar->get(UCAL_SECOND, status),
+                d->_calendar->get(UCAL_MILLISECOND, status));
+
+        return QDateTime(date, time, spec);
     }
-    // We cannot use QDateTime::setTime_t because this
-    // works only for dates after 1970-01-01T00:00:00.000.
-    QDateTime dateTime;
-    // avoid conversions by Qt
-    dateTime.setTimeSpec(Qt::UTC);
-#if QT_VERSION >= 0x040700
-    dateTime.setMSecsSinceEpoch(qint64(icuDate));
-#else
-    // Qt < 4.7 lacks QDateTime::setMSecsSinceEpoch(), we need to emulate it.
-    qint64 msecs = qint64(icuDate);
-    int ddays = msecs / MSECS_PER_DAY;
-    msecs %= MSECS_PER_DAY;
-    if (msecs < 0) {
-        // negative
-        --ddays;
-        msecs += MSECS_PER_DAY;
-    }
-    dateTime.setDate(QDate(1970, 1, 1).addDays(ddays));
-    dateTime.setTime(QTime().addMSecs(msecs));
-#endif
-    // note: we set time spec after time value so Qt will not any
-    // conversions of its own to UTC. We might let Qt handle it but
-    // this might be more robust
-    dateTime.setTimeSpec(spec);
-    return dateTime;
 }
 
 
