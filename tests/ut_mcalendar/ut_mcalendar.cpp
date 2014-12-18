@@ -1649,16 +1649,21 @@ void Ut_MCalendar::testMLocaleCalendarConversionsFromLocaltimeQDateTime()
                 // due to daylight savings time. Therefore don’t
                 // compare the result here.
             }
-            else if (timeType == MLocale::TimeNone) {
-                QVERIFY2(dateTimeParsedFromFormattedResult.isValid(),
-                         "this datetime should have been valid.");
-                dateTimeParsedFromFormattedResult.setTime(datetime.time());
-                QCOMPARE(dateTimeParsedFromFormattedResult, datetime);
-            }
             else {
                 QVERIFY2(dateTimeParsedFromFormattedResult.isValid(),
                          "this datetime should have been valid.");
-                QCOMPARE(dateTimeParsedFromFormattedResult, datetime);
+
+                // QCOMPARE(dateTimeParsedFromFormattedResult, datetime) would not work for
+                // summertime switch time.
+                QCOMPARE(
+                        locale.formatDateTime(dateTimeParsedFromFormattedResult,
+                            static_cast<MLocale::DateType>(dateType),
+                            static_cast<MLocale::TimeType>(timeType),
+                            calType),
+                        locale.formatDateTime(datetime,
+                            static_cast<MLocale::DateType>(dateType),
+                            static_cast<MLocale::TimeType>(timeType),
+                            calType));
             }
         }
     }
