@@ -1,9 +1,0 @@
-/*! \page bugreporting Reporting a bug
-
-You can add bugs to the <a href="http://bugs.meego.com/enter_bug.cgi?product=MeeGo%20Touch%20Framework">MeeGo Bugzilla</a>.
-
-Before reporting a new bug, check that it does not already exist in Bugzilla.
-
-It is recommended that you include a minor test case or program that demonstrates the problem.
-
-*/
